@@ -1,28 +1,63 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
+const ROW = 'li, [role="listitem"]'
+// The first span in a /pulls row's description holds "owner/repo #123".
+// GitHub hashes the CSS module class (Description-module__description__AbC12),
+// so match its start, and not names that only contain it, like
+// TitleDescription-module__.
+const DESCRIPTION_SPAN = ['[class^="Description-module__"]', '[class*=" Description-module__"]']
+  .map((description) => `${description} > span:first-child`)
+  .join(", ")
 
-// Where the badge goes on each page: right after "owner/repo #123".
+// On each page: the link that names the row's PR, and where the badge goes,
+// right after "owner/repo #123". On /pulls a row can link to other PRs too,
+// so only the title link counts.
 const PAGES = [
-  { prefix: "/notifications", anchor: (link) => link.querySelector("p.f6") },
-  { prefix: "/pulls", anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child') }
+  { prefix: "/notifications", link: 'a[href*="/pull/"]', anchor: (link) => link.querySelector("p.f6") },
+  {
+    prefix: "/pulls",
+    link: 'h3 a[href*="/pull/"]',
+    anchor: (_link, row) => row.querySelector(DESCRIPTION_SPAN)
+  }
 ]
 
+// "/pulls" and "/pulls/review-requested", but not "/pullsbot/widgets/pulls".
 function currentPage() {
-  return PAGES.find(({ prefix }) => location.pathname.startsWith(prefix))
+  const path = location.pathname
+  return PAGES.find(({ prefix }) => path === prefix || path.startsWith(`${prefix}/`))
 }
 
-function scan() {
+// Decorates the PR rows in `scope`, which is the document or part of it.
+function scan(scope) {
   const page = currentPage()
   if (!page) return
-  for (const link of document.querySelectorAll('a[href*="/pull/"]')) {
+  const links = [...scope.querySelectorAll(page.link)]
+  if (scope.matches?.(page.link)) links.push(scope)
+  for (const link of links) {
     const path = prPath(link)
-    const row = link.closest("li")
-    if (!path || !row || row.hasAttribute(DONE)) continue
-    const anchor = page.anchor(link, row)
-    if (!anchor) continue
-    row.setAttribute(DONE, "")
+    const found = path && locate(page, link)
+    if (!found) continue
+    // React can reuse a row for another PR, or re-render the part holding
+    // the badge, so a row is done only while its badge is there for its PR.
+    const { row, anchor } = found
+    if (row.getAttribute(DONE) === path && anchor.querySelector(".gh-diffstat")) continue
+    for (const stale of row.querySelectorAll(".gh-diffstat")) stale.remove()
+    row.setAttribute(DONE, path)
     decorate(anchor, path)
   }
+}
+
+// The list item for `link`'s PR and where its badge goes. Starts at the
+// nearest list item and moves out, so a link inside a nested list still
+// finds its row, but stops at an item holding more than one PR, which is a
+// whole list rather than a row.
+function locate(page, link) {
+  for (let row = link.closest(ROW); row; row = row.parentElement?.closest(ROW)) {
+    if (row.querySelectorAll(page.link).length > 1) return null
+    const anchor = page.anchor(link, row)
+    if (anchor) return { row, anchor }
+  }
+  return null
 }
 
 function prPath(link) {
@@ -100,15 +135,29 @@ function repeat(n, className) {
   return Array.from({ length: n }, () => span(className))
 }
 
+// Rescans only the rows that changed, so a row that never gets a badge
+// isn't searched again every time something else on the page changes.
+const changed = new Set()
 let scheduled = false
-function scheduleScan() {
-  if (scheduled) return
+function scheduleScan(records) {
+  for (const record of records) {
+    for (const node of record.type === "attributes" ? [record.target] : record.addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE || node.closest(".gh-diffstat")) continue
+      changed.add(node.closest(ROW) ?? node)
+    }
+  }
+  if (scheduled || changed.size === 0) return
   scheduled = true
   requestAnimationFrame(() => {
     scheduled = false
-    scan()
+    for (const scope of changed) if (scope.isConnected) scan(scope)
+    changed.clear()
   })
 }
 
-new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true })
-scan()
+new MutationObserver(scheduleScan).observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+  attributeFilter: ["href"]
+})
+scan(document)
