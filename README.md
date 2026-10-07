@@ -58,11 +58,17 @@ The extension sends nothing anywhere except GitHub.
 ## Development
 
 ```bash
-node test.js
+npm install
+npm test
 ```
 
-The tests cover the diff line counter and block math in `diffstat.js`, and
-the search response parsing in `review-requests.js`.
+`test.js` covers the diff line counter and block math in `diffstat.js`, and
+the search response parsing in `review-requests.js`. `content.test.js` loads
+`content.js` into [jsdom](https://github.com/jsdom/jsdom) with copies of the
+notifications and `/pulls` markup and checks where badges land. Specs marked
+`todo` describe known problems; they run and report failures without failing
+the suite, so remove the `todo` once a fix makes one pass. CI runs `npm test`
+on every push to `main` and every pull request.
 After editing, click the reload icon on the extension's card in
 `chrome://extensions`, then reload the notifications page.
 
