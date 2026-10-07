@@ -7,8 +7,10 @@ const PAGES = [
   { prefix: "/pulls", anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child') }
 ]
 
+// "/pulls" and "/pulls/review-requested", but not "/pullsbot/widgets/pulls".
 function currentPage() {
-  return PAGES.find(({ prefix }) => location.pathname.startsWith(prefix))
+  const path = location.pathname
+  return PAGES.find(({ prefix }) => path === prefix || path.startsWith(`${prefix}/`))
 }
 
 function scan() {

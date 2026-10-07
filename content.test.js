@@ -83,7 +83,7 @@ test("pages outside /notifications and /pulls are left alone", async () => {
 })
 
 // Review finding 2.
-test("an owner whose name starts with pulls or notifications doesn't match", { todo: "currentPage() uses startsWith" }, async () => {
+test("an owner whose name starts with pulls or notifications doesn't match", async () => {
   for (const url of ["https://github.com/pullsbot/widgets/pulls", "https://github.com/notificationsbot/widgets/pulls"]) {
     const page = load(url, list(pullsRow(12), notificationRow(7)))
     await page.settle()
