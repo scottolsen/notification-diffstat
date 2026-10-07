@@ -1,5 +1,12 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
+// The first span in a /pulls row's description holds "owner/repo #123".
+// GitHub hashes the CSS module class (Description-module__description__AbC12),
+// so match its start, and not names that only contain it, like
+// TitleDescription-module__.
+const DESCRIPTION_SPAN = ['[class^="Description-module__"]', '[class*=" Description-module__"]']
+  .map((description) => `${description} > span:first-child`)
+  .join(", ")
 
 // On each page: the link that names the row's PR, and where the badge goes,
 // right after "owner/repo #123". On /pulls a row can link to other PRs too,
@@ -9,7 +16,7 @@ const PAGES = [
   {
     prefix: "/pulls",
     link: 'h3 a[href*="/pull/"]',
-    anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child')
+    anchor: (_link, row) => row.querySelector(DESCRIPTION_SPAN)
   }
 ]
 

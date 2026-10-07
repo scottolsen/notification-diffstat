@@ -149,7 +149,7 @@ test("a row with no badge anchor isn't re-queried on every mutation", async () =
 })
 
 // Review finding 5.
-test("another *Description-module* element earlier in the row doesn't take the badge", { todo: "the anchor selector matches any class containing Description-module" }, async () => {
+test("another *Description-module* element earlier in the row doesn't take the badge", async () => {
   const decoy = `<div class="TitleDescription-module__summary"><span>Draft</span></div>`
   const page = load("https://github.com/pulls", list(pullsRow(12, { extra: decoy })))
   await page.settle()
