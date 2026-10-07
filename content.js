@@ -1,10 +1,16 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
 
-// Where the badge goes on each page: right after "owner/repo #123".
+// On each page: the link that names the row's PR, and where the badge goes,
+// right after "owner/repo #123". On /pulls a row can link to other PRs too,
+// so only the title link counts.
 const PAGES = [
-  { prefix: "/notifications", anchor: (link) => link.querySelector("p.f6") },
-  { prefix: "/pulls", anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child') }
+  { prefix: "/notifications", link: 'a[href*="/pull/"]', anchor: (link) => link.querySelector("p.f6") },
+  {
+    prefix: "/pulls",
+    link: 'h3 a[href*="/pull/"]',
+    anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child')
+  }
 ]
 
 // "/pulls" and "/pulls/review-requested", but not "/pullsbot/widgets/pulls".
@@ -16,7 +22,7 @@ function currentPage() {
 function scan() {
   const page = currentPage()
   if (!page) return
-  for (const link of document.querySelectorAll('a[href*="/pull/"]')) {
+  for (const link of document.querySelectorAll(page.link)) {
     const path = prPath(link)
     const row = link.closest("li")
     if (!path || !row || row.hasAttribute(DONE)) continue

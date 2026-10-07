@@ -114,7 +114,7 @@ test("a row whose badge span React re-renders gets a badge again", { todo: "the 
 })
 
 // Review finding 3.
-test("the badge uses the row's title PR, not the first PR link in the row", { todo: "scan() takes the first /pull/ link it reaches" }, async () => {
+test("the badge uses the row's title PR, not the first PR link in the row", async () => {
   const linked = `<a href="https://github.com/acme/widgets/pull/99">linked: #99</a>`
   const page = load("https://github.com/pulls", list(pullsRow(12, { extra: linked })))
   await page.settle()
@@ -123,7 +123,7 @@ test("the badge uses the row's title PR, not the first PR link in the row", { to
 
 // Review finding 4.
 test("a row with no badge anchor isn't re-queried on every mutation", { todo: "rows without an anchor are never marked" }, async () => {
-  const page = load("https://github.com/pulls", list(`<li><a href="https://github.com/acme/widgets/pull/12">No description</a></li>`))
+  const page = load("https://github.com/pulls", list(`<li><h3><a href="https://github.com/acme/widgets/pull/12">No description</a></h3></li>`))
   const { Element } = page.window
   const querySelector = Element.prototype.querySelector
   let lookups = 0
