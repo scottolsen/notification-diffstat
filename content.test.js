@@ -158,14 +158,21 @@ test("another *Description-module* element earlier in the row doesn't take the b
 })
 
 // Review finding 6.
-test("rows rendered as div[role=listitem] are decorated", { todo: "scan() requires an li" }, async () => {
+test("rows rendered as div[role=listitem] are decorated", async () => {
   const page = load("https://github.com/pulls", `<div role="list">${pullsRow(12, { tag: "div" })}</div>`)
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+12"])
 })
 
-test("a PR link inside a nested li still decorates its row", { todo: "closest('li') finds the inner li" }, async () => {
+test("a PR link inside a nested li still decorates its row", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12).replace(/<h3([^>]*)>([\s\S]*?)<\/h3>/, "<h3$1><ul><li>$2</li></ul></h3>")))
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+12"])
+})
+
+test("a row with no anchor doesn't borrow another row's from an enclosing list item", async () => {
+  const bare = `<li><h3><a href="https://github.com/acme/widgets/pull/34">No description</a></h3></li>`
+  const page = load("https://github.com/pulls", `<ul><li>${list(pullsRow(12), bare)}</li></ul>`)
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+12"])
 })

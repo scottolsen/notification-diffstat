@@ -1,5 +1,6 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
+const ROW = 'li, [role="listitem"]'
 // The first span in a /pulls row's description holds "owner/repo #123".
 // GitHub hashes the CSS module class (Description-module__description__AbC12),
 // so match its start, and not names that only contain it, like
@@ -34,13 +35,25 @@ function scan(scope) {
   if (scope.matches?.(page.link)) links.push(scope)
   for (const link of links) {
     const path = prPath(link)
-    const row = link.closest("li")
-    if (!path || !row || row.hasAttribute(DONE)) continue
-    const anchor = page.anchor(link, row)
-    if (!anchor) continue
+    const found = path && locate(page, link)
+    if (!found || found.row.hasAttribute(DONE)) continue
+    const { row, anchor } = found
     row.setAttribute(DONE, "")
     decorate(anchor, path)
   }
+}
+
+// The list item for `link`'s PR and where its badge goes. Starts at the
+// nearest list item and moves out, so a link inside a nested list still
+// finds its row, but stops at an item holding more than one PR, which is a
+// whole list rather than a row.
+function locate(page, link) {
+  for (let row = link.closest(ROW); row; row = row.parentElement?.closest(ROW)) {
+    if (row.querySelectorAll(page.link).length > 1) return null
+    const anchor = page.anchor(link, row)
+    if (anchor) return { row, anchor }
+  }
+  return null
 }
 
 function prPath(link) {
@@ -126,7 +139,7 @@ function scheduleScan(records) {
   for (const { addedNodes } of records) {
     for (const node of addedNodes) {
       if (node.nodeType !== Node.ELEMENT_NODE || node.closest(".gh-diffstat")) continue
-      changed.add(node.closest("li") ?? node)
+      changed.add(node.closest(ROW) ?? node)
     }
   }
   if (scheduled || changed.size === 0) return
