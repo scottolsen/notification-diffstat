@@ -75,6 +75,16 @@ test("rows added after load are decorated", async () => {
   assert.deepStrictEqual(page.badges(), ["+12", "+34"])
 })
 
+test("a row whose description renders after its title is decorated", async () => {
+  const [, before, description, after] = pullsRow(12).match(/^([\s\S]*)(<div class="Description-module[\s\S]*?<\/div>)([\s\S]*)$/)
+  const page = load("https://github.com/pulls", list(before + after))
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), [])
+  page.document.querySelector('[class*="MainContent-module"]').insertAdjacentHTML("beforeend", description)
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+12"])
+})
+
 test("pages outside /notifications and /pulls are left alone", async () => {
   const page = load("https://github.com/acme/widgets/pulls", list(pullsRow(12), notificationRow(7)))
   await page.settle()
@@ -122,7 +132,7 @@ test("the badge uses the row's title PR, not the first PR link in the row", asyn
 })
 
 // Review finding 4.
-test("a row with no badge anchor isn't re-queried on every mutation", { todo: "rows without an anchor are never marked" }, async () => {
+test("a row with no badge anchor isn't re-queried on every mutation", async () => {
   const page = load("https://github.com/pulls", list(`<li><h3><a href="https://github.com/acme/widgets/pull/12">No description</a></h3></li>`))
   const { Element } = page.window
   const querySelector = Element.prototype.querySelector

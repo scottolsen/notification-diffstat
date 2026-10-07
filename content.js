@@ -19,10 +19,13 @@ function currentPage() {
   return PAGES.find(({ prefix }) => path === prefix || path.startsWith(`${prefix}/`))
 }
 
-function scan() {
+// Decorates the PR rows in `scope`, which is the document or part of it.
+function scan(scope) {
   const page = currentPage()
   if (!page) return
-  for (const link of document.querySelectorAll(page.link)) {
+  const links = [...scope.querySelectorAll(page.link)]
+  if (scope.matches?.(page.link)) links.push(scope)
+  for (const link of links) {
     const path = prPath(link)
     const row = link.closest("li")
     if (!path || !row || row.hasAttribute(DONE)) continue
@@ -108,15 +111,25 @@ function repeat(n, className) {
   return Array.from({ length: n }, () => span(className))
 }
 
+// Rescans only the rows that changed, so a row that never gets a badge
+// isn't searched again every time something else on the page changes.
+const changed = new Set()
 let scheduled = false
-function scheduleScan() {
-  if (scheduled) return
+function scheduleScan(records) {
+  for (const { addedNodes } of records) {
+    for (const node of addedNodes) {
+      if (node.nodeType !== Node.ELEMENT_NODE || node.closest(".gh-diffstat")) continue
+      changed.add(node.closest("li") ?? node)
+    }
+  }
+  if (scheduled || changed.size === 0) return
   scheduled = true
   requestAnimationFrame(() => {
     scheduled = false
-    scan()
+    for (const scope of changed) if (scope.isConnected) scan(scope)
+    changed.clear()
   })
 }
 
 new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true })
-scan()
+scan(document)
