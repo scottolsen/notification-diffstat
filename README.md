@@ -1,9 +1,10 @@
 # GitHub Notification Diffstat
 
 A Chrome extension that shows the size of each pull request on
-[github.com/notifications](https://github.com/notifications): additions,
-deletions, and GitHub's five-block diffstat, right after the PR number in
-each notification row.
+[github.com/notifications](https://github.com/notifications) and in the
+pull request lists under [github.com/pulls](https://github.com/pulls), such as
+[review requests](https://github.com/pulls/reviews): additions, deletions, and
+GitHub's five-block diffstat, right after the PR number in each row.
 
 ![A notification row showing +9 −54 and four red diffstat blocks right after the PR number](screenshot.png)
 
@@ -22,8 +23,8 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
 
 ## How it works
 
-- A content script finds pull request links in the notification list. Issues
-  and other notification types are left alone.
+- A content script finds pull request links in the notification list and in
+  the `/pulls` lists. Issues and other notification types are left alone.
 - For each PR, the background service worker downloads
   `github.com/<owner>/<repo>/pull/<n>.diff` using your existing GitHub login
   and counts the added and removed lines. Private repos work if your account
@@ -48,7 +49,7 @@ see the error.
 
 | Permission | Why |
 | --- | --- |
-| `https://github.com/*` | Runs on the notifications page, requests `.diff` files and searches your review requests. |
+| `https://github.com/*` | Runs on the notifications and pull request list pages, requests `.diff` files and searches your review requests. |
 | `https://patch-diff.githubusercontent.com/*` | GitHub redirects `.diff` requests here. |
 | `storage` | Caches diff counts and review requests for the browser session. |
 
@@ -67,8 +68,9 @@ After editing, click the reload icon on the extension's card in
 
 ## Limitations
 
-- The badge is placed using GitHub's notification markup. If GitHub changes
-  it, the badge may stop appearing until the extension is updated.
+- The badge is placed using GitHub's notification and pull request list
+  markup. If GitHub changes it, the badge may stop appearing until the
+  extension is updated.
 - Very large PRs mean very large `.diff` downloads.
 
 ## License

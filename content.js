@@ -1,18 +1,27 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
 
-function onNotificationsPage() {
-  return location.pathname.startsWith("/notifications")
+// Where the badge goes on each page: right after "owner/repo #123".
+const PAGES = [
+  { prefix: "/notifications", anchor: (link) => link.querySelector("p.f6") },
+  { prefix: "/pulls", anchor: (_link, row) => row.querySelector('[class*="Description-module"] > span:first-child') }
+]
+
+function currentPage() {
+  return PAGES.find(({ prefix }) => location.pathname.startsWith(prefix))
 }
 
 function scan() {
-  if (!onNotificationsPage()) return
+  const page = currentPage()
+  if (!page) return
   for (const link of document.querySelectorAll('a[href*="/pull/"]')) {
     const path = prPath(link)
     const row = link.closest("li")
     if (!path || !row || row.hasAttribute(DONE)) continue
+    const anchor = page.anchor(link, row)
+    if (!anchor) continue
     row.setAttribute(DONE, "")
-    decorate(link, path)
+    decorate(anchor, path)
   }
 }
 
@@ -22,15 +31,11 @@ function prPath(link) {
   return url.pathname.match(PR_PATH)?.[0] ?? null
 }
 
-async function decorate(link, path) {
-  // Sits right after "owner/repo #123" on the title's top line.
-  const repoLine = link.querySelector("p.f6")
-  if (!repoLine) return
-
+async function decorate(anchor, path) {
   const badge = document.createElement("span")
   badge.className = "gh-diffstat gh-diffstat--loading"
   badge.textContent = "…"
-  repoLine.append(badge)
+  anchor.append(badge)
 
   const [res, requested] = await Promise.all([ask({ type: "diffstat", path }), requestedPaths()])
   if (res.ok) render(badge, res.result)

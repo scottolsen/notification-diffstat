@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GitHub Notification Diffstat",
   "version": "0.1.0",
-  "description": "Shows +additions −deletions and diffstat blocks for pull requests on github.com/notifications.",
+  "description": "Shows +additions −deletions and diffstat blocks for pull requests on github.com/notifications and github.com/pulls.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://github.com/*",
