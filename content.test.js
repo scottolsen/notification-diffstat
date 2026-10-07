@@ -105,7 +105,7 @@ test("an owner whose name starts with pulls or notifications doesn't match", asy
 // Review finding 1. GitHub keys /pulls rows by PR today (checked in Chrome
 // by switching lists), so these guard against a change in that, not a
 // current bug.
-test("a row React reuses for another PR shows that PR's diffstat", { todo: "the done marker is on the li, not tied to the PR" }, async () => {
+test("a row React reuses for another PR shows that PR's diffstat", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12)))
   await page.settle()
   page.document.querySelector("a").setAttribute("href", "https://github.com/acme/widgets/pull/34")
@@ -114,7 +114,7 @@ test("a row React reuses for another PR shows that PR's diffstat", { todo: "the 
   assert.deepStrictEqual(page.badges(), ["+34"])
 })
 
-test("a row whose badge span React re-renders gets a badge again", { todo: "the li stays marked done" }, async () => {
+test("a row whose badge span React re-renders gets a badge again", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12)))
   await page.settle()
   const span = page.document.querySelector('[class*="Description-module"] > span:first-child')

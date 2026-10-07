@@ -36,9 +36,13 @@ function scan(scope) {
   for (const link of links) {
     const path = prPath(link)
     const found = path && locate(page, link)
-    if (!found || found.row.hasAttribute(DONE)) continue
+    if (!found) continue
+    // React can reuse a row for another PR, or re-render the part holding
+    // the badge, so a row is done only while its badge is there for its PR.
     const { row, anchor } = found
-    row.setAttribute(DONE, "")
+    if (row.getAttribute(DONE) === path && anchor.querySelector(".gh-diffstat")) continue
+    for (const stale of row.querySelectorAll(".gh-diffstat")) stale.remove()
+    row.setAttribute(DONE, path)
     decorate(anchor, path)
   }
 }
@@ -136,8 +140,8 @@ function repeat(n, className) {
 const changed = new Set()
 let scheduled = false
 function scheduleScan(records) {
-  for (const { addedNodes } of records) {
-    for (const node of addedNodes) {
+  for (const record of records) {
+    for (const node of record.type === "attributes" ? [record.target] : record.addedNodes) {
       if (node.nodeType !== Node.ELEMENT_NODE || node.closest(".gh-diffstat")) continue
       changed.add(node.closest(ROW) ?? node)
     }
@@ -151,5 +155,9 @@ function scheduleScan(records) {
   })
 }
 
-new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true })
+new MutationObserver(scheduleScan).observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+  attributeFilter: ["href"]
+})
 scan(document)
