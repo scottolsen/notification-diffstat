@@ -2,6 +2,7 @@
 const assert = require("node:assert")
 const { count, blocks } = require("./diffstat.js")
 const ReviewRequests = require("./review-requests.js")
+const Reviewers = require("./reviewers.js")
 
 const diff = [
   "diff --git a/a.rb b/a.rb",
@@ -39,5 +40,9 @@ search.payload.blackbirdSearchRoute.logged_in = false
 assert.throws(() => ReviewRequests.parse(search), /not signed in/)
 assert.throws(() => ReviewRequests.parse({}), /unexpected search response/)
 assert.match(ReviewRequests.searchUrl(2), /p=2&q=is%3Apr%20is%3Aopen%20user-review-requested%3A%40me$/)
+
+const page = '<form action="/search"></form><div><form class="js-issue-sidebar-form" aria-label="Select reviewers"><p>cashmann</p></form></div><form aria-label="Select assignees"></form>'
+assert.strictEqual(Reviewers.section(page), '<form class="js-issue-sidebar-form" aria-label="Select reviewers"><p>cashmann</p></form>')
+assert.throws(() => Reviewers.section("<form></form>"), /no reviewers sidebar/)
 
 console.log("ok")

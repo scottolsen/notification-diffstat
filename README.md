@@ -34,9 +34,15 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   GitHub search (`is:pr is:open user-review-requested:@me`) per page view.
   GitHub clears a request once you submit a review, so the star goes away
   then too.
-- Up to four diffs are fetched at once, and results are cached for five
-  minutes per browser session. The review request search is cached for two
-  minutes.
+- In the `/pulls` lists, each PR gets a
+  second line listing its reviewers with the same icons as the PR page's
+  Reviewers sidebar: a green check for approved, a red file-diff for changes
+  requested, a grey comment for commented, and a yellow dot for awaiting
+  review. Hover over one to see GitHub's description. The extension reads
+  these from the sidebar of each PR's page.
+- Up to four diffs or PR pages are fetched at once, and results are cached for five
+  minutes per browser session. The review request search and each PR's
+  reviewers are cached for two minutes.
 - The blocks use GitHub's rounding, so `+10 −53` shows 0 green, 4 red and
   1 grey, the same as on the PR page.
 - Colors come from GitHub's own CSS variables, so it matches light and dark
@@ -49,9 +55,9 @@ see the error.
 
 | Permission | Why |
 | --- | --- |
-| `https://github.com/*` | Runs on the notifications and pull request list pages, requests `.diff` files and searches your review requests. |
+| `https://github.com/*` | Runs on the notifications and pull request list pages, requests `.diff` files and PR pages and searches your review requests. |
 | `https://patch-diff.githubusercontent.com/*` | GitHub redirects `.diff` requests here. |
-| `storage` | Caches diff counts and review requests for the browser session. |
+| `storage` | Caches diff counts, review requests and reviewers for the browser session. |
 
 The extension sends nothing anywhere except GitHub.
 
@@ -63,7 +69,8 @@ npm test
 ```
 
 `test.js` covers the diff line counter and block math in `diffstat.js`, and
-the search response parsing in `review-requests.js`. `content.test.js` loads
+the search response parsing in `review-requests.js`, and cutting the
+Reviewers sidebar out of a PR page in `reviewers.js`. `content.test.js` loads
 `content.js` into [jsdom](https://github.com/jsdom/jsdom) with copies of the
 notifications and `/pulls` markup and checks where badges land. Specs marked
 `todo` describe known problems; they run and report failures without failing

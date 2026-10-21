@@ -1,16 +1,18 @@
 const DIFFSTAT_TTL_MS = 5 * 60 * 1000
 const REQUESTED_TTL_MS = 2 * 60 * 1000
+const REVIEWERS_TTL_MS = 2 * 60 * 1000
 const MAX_CONCURRENT = 4
 const MAX_SEARCH_PAGES = 10
 
-importScripts("diffstat.js", "review-requests.js")
+importScripts("diffstat.js", "review-requests.js", "reviewers.js")
 
 let active = 0
 const queue = []
 
 const handlers = {
   diffstat: ({ path }) => cached(`diffstat:${path}`, DIFFSTAT_TTL_MS, () => throttled(() => fetchStats(path))),
-  requested: () => cached("requested", REQUESTED_TTL_MS, fetchRequested)
+  requested: () => cached("requested", REQUESTED_TTL_MS, fetchRequested),
+  reviewers: ({ path }) => cached(`reviewers:${path}`, REVIEWERS_TTL_MS, () => throttled(() => fetchReviewers(path)))
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -35,6 +37,12 @@ async function fetchStats(path) {
   const res = await fetch(`https://github.com${path}.diff`, { credentials: "include" })
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}.diff`)
   return Diffstat.count(await res.text())
+}
+
+async function fetchReviewers(path) {
+  const res = await fetch(`https://github.com${path}`, { credentials: "include" })
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
+  return Reviewers.section(await res.text())
 }
 
 async function fetchRequested() {

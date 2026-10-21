@@ -1,15 +1,15 @@
 // Run with: npm test
 // Loads diffstat.js and content.js unchanged into jsdom with a stub
 // chrome.runtime. The stub reports +<PR number> additions, so each badge
-// shows which PR it was made for.
+// shows which PR it was made for, and the reviewers sidebar in `sidebars`.
 const { test } = require("node:test")
 const assert = require("node:assert")
 const fs = require("node:fs")
 const { JSDOM } = require("jsdom")
 
-const SOURCE = ["diffstat.js", "content.js"].map((f) => fs.readFileSync(`${__dirname}/${f}`, "utf8")).join("\n")
+const SOURCE = ["diffstat.js", "reviewers.js", "content.js"].map((f) => fs.readFileSync(`${__dirname}/${f}`, "utf8")).join("\n")
 
-function load(url, html) {
+function load(url, html, sidebars = {}) {
   const dom = new JSDOM(`<!doctype html><body>${html}</body>`, { url, runScripts: "outside-only", pretendToBeVisual: true })
   const { window } = dom
   const asked = []
@@ -17,6 +17,7 @@ function load(url, html) {
     runtime: {
       sendMessage: async (msg) => {
         if (msg.type === "requested") return { ok: true, result: [] }
+        if (msg.type === "reviewers") return { ok: true, result: sidebars[msg.path] ?? sidebar() }
         asked.push(msg.path)
         return { ok: true, result: { additions: Number(msg.path.split("/").pop()), deletions: 0 } }
       }
@@ -51,6 +52,38 @@ function notificationRow(number) {
 }
 
 const list = (...rows) => `<ul>${rows.join("")}</ul>`
+
+// Markup from a PR page's Reviewers sidebar (October 21, 2026), trimmed.
+const STATE_ICONS = {
+  approved: '<svg class="octicon octicon-check color-fg-success"></svg>',
+  "changes-requested": '<svg class="octicon octicon-file-diff color-fg-danger"></svg>',
+  commented: '<svg class="octicon octicon-comment color-fg-muted"></svg>'
+}
+
+function reviewerRow(login, state) {
+  const person = `<span class="d-flex min-width-0 flex-1" data-hovercard-type="user" data-assignee-name="${login}"><a class="assignee Link--primary"><span>${login}</span></a></span>`
+  if (state === "pending") {
+    return `<div class="d-flex flex-items-center mb-2">${person}
+      <button class="btn-link flex-order-2" aria-label="Awaiting requested review from ${login}"><span class="reviewers-status-icon"><svg class="octicon octicon-dot-fill hx_dot-fill-pending-icon"></svg></span></button>
+      <tool-tip>Awaiting requested review from ${login}</tool-tip></div>`
+  }
+  return `<div class="d-flex flex-items-center mb-2">${person}
+    <a class="flex-order-1" id="review-status-${login}">${STATE_ICONS[state]}</a>
+    <tool-tip for="review-status-${login}">${login} ${state}</tool-tip>
+    <button class="mr-2 btn-link muted-icon" type="submit"><span class="reviewers-status-icon"><svg class="octicon octicon-sync"></svg></span></button>
+    <tool-tip>Re-request review</tool-tip></div>`
+}
+
+function sidebar(...rows) {
+  const picker = `<details><div data-hovercard-type="user" data-assignee-name="suggested">suggested</div></details>`
+  return `<form class="js-issue-sidebar-form" aria-label="Select reviewers">${picker}<span class="css-truncate">${rows.join("")}
+    <p class="mt-2">At least 1 approving review is required to merge this pull request.</p></span></form>`
+}
+
+const reviewerLines = (page) =>
+  [...page.document.querySelectorAll(".gh-reviewers")].map((line) =>
+    [...line.children].map((r) => `${r.className.split("--").pop()} ${r.textContent} (${r.title})`)
+  )
 
 test("/pulls: each row gets one badge for its PR, after owner/repo #number", async () => {
   const page = load("https://github.com/pulls/review-requested", list(pullsRow(12), pullsRow(34)))
@@ -189,4 +222,67 @@ test("a row with no anchor doesn't borrow another row's from an enclosing list i
   const page = load("https://github.com/pulls", `<ul><li>${list(pullsRow(12), bare)}</li></ul>`)
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+12"])
+})
+
+test("/pulls: each row gets a line with every reviewer and their review state", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12), pullsRow(34)), {
+    "/acme/widgets/pull/12": sidebar(
+      reviewerRow("ana", "approved"),
+      reviewerRow("bo", "changes-requested"),
+      reviewerRow("cy", "commented"),
+      reviewerRow("di", "pending")
+    ),
+    "/acme/widgets/pull/34": sidebar(reviewerRow("ana", "pending"))
+  })
+  await page.settle()
+  assert.deepStrictEqual(reviewerLines(page), [
+    [
+      "approved ana (ana approved)",
+      "changes-requested bo (bo changes-requested)",
+      "commented cy (cy commented)",
+      "pending di (Awaiting requested review from di)"
+    ],
+    ["pending ana (Awaiting requested review from ana)"]
+  ])
+  const line = page.document.querySelector(".gh-reviewers")
+  assert.strictEqual(line.previousElementSibling, page.document.querySelector(".description__mZjLFE"))
+  assert.deepStrictEqual(
+    [...line.querySelectorAll("svg")].map((svg) => svg.getAttribute("aria-label")),
+    ["ana approved", "bo changes-requested", "cy commented", "Awaiting requested review from di"]
+  )
+})
+
+test("/pulls: a PR with no reviewers gets no reviewer line", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), { "/acme/widgets/pull/12": sidebar() })
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+12"])
+  assert.deepStrictEqual(reviewerLines(page), [])
+})
+
+test("every /pulls list gets reviewer lines", async () => {
+  for (const url of ["https://github.com/pulls", "https://github.com/pulls/review-requested", "https://github.com/pulls/assigned"]) {
+    const page = load(url, list(pullsRow(12)), { "/acme/widgets/pull/12": sidebar(reviewerRow("ana", "approved")) })
+    await page.settle()
+    assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)"]], url)
+  }
+})
+
+test("/notifications rows don't get reviewer lines", async () => {
+  const page = load("https://github.com/notifications", list(notificationRow(7)), {
+    "/acme/widgets/pull/7": sidebar(reviewerRow("ana", "approved"))
+  })
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+7"])
+  assert.deepStrictEqual(reviewerLines(page), [])
+})
+
+test("/pulls: a row decorated again keeps a single reviewer line", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), {
+    "/acme/widgets/pull/12": sidebar(reviewerRow("ana", "approved"))
+  })
+  await page.settle()
+  const span = page.document.querySelector(".description__mZjLFE > span:first-child")
+  span.replaceWith(span.ownerDocument.createRange().createContextualFragment("<span><button>acme/widgets</button><span>#12</span></span>"))
+  await page.settle()
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)"]])
 })

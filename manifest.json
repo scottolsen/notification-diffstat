@@ -12,7 +12,7 @@
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["diffstat.js", "content.js"],
+      "js": ["diffstat.js", "reviewers.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
