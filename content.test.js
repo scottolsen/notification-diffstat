@@ -46,9 +46,12 @@ function pullsRow(number, { title = number, heading = "Make widgets faster", ext
     </${tag}>`
 }
 
-// Markup from github.com/notifications.
+// Markup from github.com/notifications, trimmed: "owner/repo #123" sits in
+// its own wrapper, with the PR title after it.
 function notificationRow(number) {
-  return `<li class="notifications-list-item"><a href="/acme/widgets/pull/${number}"><p class="f6">acme/widgets #${number}</p></a></li>`
+  return `<li class="notifications-list-item"><a href="/acme/widgets/pull/${number}">
+    <div class="d-flex"><p class="m-0 f6 flex-auto">acme/widgets <span>#${number}</span></p></div>
+    <p class="markdown-title m-0">Make widgets faster</p></a></li>`
 }
 
 const list = (...rows) => `<ul>${rows.join("")}</ul>`
@@ -267,13 +270,15 @@ test("every /pulls list gets reviewer lines", async () => {
   }
 })
 
-test("/notifications rows don't get reviewer lines", async () => {
+test("/notifications: each PR row gets a reviewer line under its title", async () => {
   const page = load("https://github.com/notifications", list(notificationRow(7)), {
-    "/acme/widgets/pull/7": sidebar(reviewerRow("ana", "approved"))
+    "/acme/widgets/pull/7": sidebar(reviewerRow("ana", "approved"), reviewerRow("bo", "pending"))
   })
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+7"])
-  assert.deepStrictEqual(reviewerLines(page), [])
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)", "pending bo (Awaiting requested review from bo)"]])
+  const line = page.document.querySelector(".gh-reviewers")
+  assert.strictEqual(line.previousElementSibling, page.document.querySelector(".markdown-title"))
 })
 
 test("/pulls: a row decorated again keeps a single reviewer line", async () => {

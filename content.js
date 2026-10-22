@@ -5,15 +5,21 @@ const OURS = ".gh-diffstat, .gh-reviewers"
 
 // On each page: the link that names the row's PR, and where the badge goes,
 // right after "owner/repo #123". On /pulls a row can link to other PRs too,
-// so only the title link counts. /pulls rows also get a line listing their
-// reviewers.
+// so only the title link counts. Rows on both pages also get a line listing
+// their reviewers, placed after the element `reviewersAfter` returns: the PR
+// title on /notifications, the "owner/repo #123" line on /pulls.
 const PAGES = [
-  { prefix: "/notifications", link: 'a[href*="/pull/"]', anchor: (link) => link.querySelector("p.f6") },
+  {
+    prefix: "/notifications",
+    link: 'a[href*="/pull/"]',
+    anchor: (link) => link.querySelector("p.f6"),
+    reviewersAfter: (anchor) => anchor.closest("a")?.querySelector(".markdown-title") ?? anchor.parentElement
+  },
   {
     prefix: "/pulls",
     link: 'h3 a[href*="/pull/"]',
     anchor: prNumberLine,
-    reviewers: true
+    reviewersAfter: (anchor) => anchor.parentElement
   }
 ]
 
@@ -87,7 +93,7 @@ async function decorate(page, anchor, path) {
   badge.className = "gh-diffstat gh-diffstat--loading"
   badge.textContent = "…"
   anchor.append(badge)
-  if (page.reviewers) showReviewers(anchor, badge, path)
+  showReviewers(page.reviewersAfter(anchor), badge, path)
 
   const [res, requested] = await Promise.all([ask({ type: "diffstat", path }), requestedPaths()])
   if (res.ok) render(badge, res.result)
@@ -116,10 +122,10 @@ async function loadRequested() {
   return []
 }
 
-// Adds a line under the row's description with each reviewer's state. The
+// Adds a line after `after` with each reviewer's state. The
 // badge stands for this decoration of the row: once a rescan has removed
 // it, the line belongs to a row that's been decorated again.
-async function showReviewers(anchor, badge, path) {
+async function showReviewers(after, badge, path) {
   const res = await ask({ type: "reviewers", path })
   if (!res.ok) return console.warn(`notification-diffstat: couldn't load reviewers for ${path}:`, res.error)
   const reviewers = Reviewers.parse(new DOMParser().parseFromString(res.result, "text/html"))
@@ -127,7 +133,7 @@ async function showReviewers(anchor, badge, path) {
   const line = document.createElement("div")
   line.className = "gh-reviewers"
   line.append(...reviewers.map(reviewer))
-  anchor.parentElement.after(line)
+  after.after(line)
 }
 
 function reviewer({ login, state, label }) {

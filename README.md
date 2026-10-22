@@ -34,7 +34,7 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   GitHub search (`is:pr is:open user-review-requested:@me`) per page view.
   GitHub clears a request once you submit a review, so the star goes away
   then too.
-- In the `/pulls` lists, each PR gets a
+- On the notifications page and in the `/pulls` lists, each PR gets a
   second line listing its reviewers with the same icons as the PR page's
   Reviewers sidebar: a green check for approved, a red file-diff for changes
   requested, a grey comment for commented, and a yellow dot for awaiting
@@ -78,6 +78,12 @@ the suite, so remove the `todo` once a fix makes one pass. CI runs `npm test`
 on every push to `main` and every pull request.
 After editing, click the reload icon on the extension's card in
 `chrome://extensions`, then reload the notifications page.
+
+Bump `version` in `manifest.json` in every PR that changes what the extension
+does: the minor version for a feature, the patch version for a fix. People
+load it unpacked, so Chrome never updates it for them; the version on its
+card in `chrome://extensions` is how you tell whether someone has pulled the
+latest.
 
 ## Limitations
 
