@@ -38,8 +38,9 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   second line listing its reviewers with the same icons as the PR page's
   Reviewers sidebar: a green check for approved, a red file-diff for changes
   requested, a grey comment for commented, and a yellow dot for awaiting
-  review. Hover over one to see GitHub's description. The extension reads
-  these from the sidebar of each PR's page.
+  review. Hover over one to see what it means. The extension reads these
+  from the JSON each PR's page loads its merge box from
+  (`/pull/123/page_data/merge_box`).
 - Up to four diffs or PR pages are fetched at once, and results are cached for five
   minutes per browser session. The review request search and each PR's
   reviewers are cached for two minutes.
@@ -69,8 +70,8 @@ npm test
 ```
 
 `test.js` covers the diff line counter and block math in `diffstat.js`, and
-the search response parsing in `review-requests.js`, and cutting the
-Reviewers sidebar out of a PR page in `reviewers.js`. `content.test.js` loads
+the search response parsing in `review-requests.js`, and reading reviewers
+out of a PR's merge box data in `reviewers.js`. `content.test.js` loads
 `content.js` into [jsdom](https://github.com/jsdom/jsdom) with copies of the
 notifications and `/pulls` markup and checks where badges land. Specs marked
 `todo` describe known problems; they run and report failures without failing

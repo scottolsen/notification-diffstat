@@ -24,6 +24,7 @@ const PAGES = [
 ]
 
 // 16px octicons, as GitHub's PR sidebar shows them for each review state.
+// Any other state, such as a dismissed review, gets the pending dot.
 const ICONS = {
   approved: "M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z",
   "changes-requested": "M1 1.75C1 .784 1.784 0 2.75 0h7.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16H2.75A1.75 1.75 0 0 1 1 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V4.664a.25.25 0 0 0-.073-.177l-2.914-2.914a.25.25 0 0 0-.177-.073ZM8 3.25a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5h-1.5v1.5a.75.75 0 0 1-1.5 0V7h-1.5a.75.75 0 0 1 0-1.5h1.5V4A.75.75 0 0 1 8 3.25Zm-3 8a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z",
@@ -128,11 +129,10 @@ async function loadRequested() {
 async function showReviewers(after, badge, path) {
   const res = await ask({ type: "reviewers", path })
   if (!res.ok) return console.warn(`notification-diffstat: couldn't load reviewers for ${path}:`, res.error)
-  const reviewers = Reviewers.parse(new DOMParser().parseFromString(res.result, "text/html"))
-  if (reviewers.length === 0 || !badge.isConnected) return
+  if (res.result.length === 0 || !badge.isConnected) return
   const line = document.createElement("div")
   line.className = "gh-reviewers"
-  line.append(...reviewers.map(reviewer))
+  line.append(...res.result.map(reviewer))
   after.after(line)
 }
 

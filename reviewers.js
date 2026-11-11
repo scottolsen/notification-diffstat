@@ -1,52 +1,47 @@
-// Shared by background.js, content.js and the Node test. No chrome APIs.
+// Shared by background.js and the Node test. No chrome APIs.
 var Reviewers = (() => {
-  // The octicon GitHub's PR sidebar shows for each review state.
   const STATES = {
-    "octicon-check": "approved",
-    "octicon-file-diff": "changes-requested",
-    "octicon-comment": "commented",
-    "octicon-dot-fill": "pending"
+    APPROVED: "approved",
+    CHANGES_REQUESTED: "changes-requested",
+    COMMENTED: "commented",
+    DISMISSED: "dismissed"
   }
 
-  // The PR page's "Reviewers" sidebar form, cut out of the page's HTML as a
-  // string so the background worker, which has no DOMParser, can cache a few
-  // KB instead of the whole page. Forms can't nest, so the first </form>
-  // after the label closes it.
-  function section(html) {
-    const label = html.indexOf('aria-label="Select reviewers"')
-    if (label === -1) throw new Error("no reviewers sidebar")
-    const start = html.lastIndexOf("<form", label)
-    const end = html.indexOf("</form>", label)
-    if (start === -1 || end === -1) throw new Error("no reviewers sidebar")
-    return html.slice(start, end + "</form>".length)
+  const LABELS = {
+    approved: (login) => `${login} approved these changes`,
+    "changes-requested": (login) => `${login} requested changes`,
+    commented: (login) => `${login} left review comments`,
+    dismissed: (login) => `${login}'s review was dismissed`,
+    pending: (login) => `Awaiting requested review from ${login}`
   }
 
-  // Reads each reviewer row out of the parsed sidebar form. A row holds the
-  // reviewer's hovercard, a state icon, and for a submitted review, a
-  // "Re-request review" button with its own sync icon. The reviewer picker
-  // inside <details> lists people too, so it's skipped.
-  function parse(root) {
-    return [...root.querySelectorAll("[data-hovercard-type]")]
-      .filter((el) => !el.closest("details"))
-      .map((el) => {
-        const row = el.parentElement
-        return {
-          login: el.getAttribute("data-assignee-name") ?? el.textContent.trim(),
-          team: el.getAttribute("data-hovercard-type") === "team",
-          state: state(row),
-          label: row.querySelector("tool-tip")?.textContent.trim() ?? ""
-        }
-      })
+  // The JSON the PR page's React app loads its merge box from. Since GitHub
+  // moved PR pages to React (November 2026), the page's HTML no longer holds
+  // the Reviewers sidebar. GitHub answers 406 unless the request asks for
+  // JSON with X-Requested-With.
+  function url(path) {
+    return `https://github.com${path}/page_data/merge_box`
   }
 
-  function state(row) {
-    for (const icon of row.querySelectorAll("svg")) {
-      for (const name of icon.classList) if (STATES[name]) return STATES[name]
-    }
-    return "unknown"
+  // Each reviewer's latest review, then everyone still asked to review. A
+  // reviewer asked again after reviewing shows as pending, as GitHub's
+  // sidebar does. A team request has a name but no login.
+  function parse(data) {
+    const pr = data?.pullRequest
+    if (!pr) throw new Error("no pull request in merge box response")
+    const pending = (pr.pendingReviewRequests ?? []).map(({ reviewer }) => entry(reviewer.login ?? reviewer.name, "pending"))
+    const waiting = new Set(pending.map(({ login }) => login))
+    const reviewed = (pr.latestOpinionatedReviews ?? [])
+      .map(({ author, state }) => entry(author.login, STATES[state] ?? "unknown"))
+      .filter(({ login }) => !waiting.has(login))
+    return [...reviewed, ...pending]
   }
 
-  return { section, parse }
+  function entry(login, state) {
+    return { login, state, label: LABELS[state]?.(login) ?? login }
+  }
+
+  return { url, parse }
 })()
 
 if (typeof module !== "undefined") module.exports = Reviewers

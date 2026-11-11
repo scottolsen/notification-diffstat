@@ -41,8 +41,31 @@ assert.throws(() => ReviewRequests.parse(search), /not signed in/)
 assert.throws(() => ReviewRequests.parse({}), /unexpected search response/)
 assert.match(ReviewRequests.searchUrl(2), /p=2&q=is%3Apr%20is%3Aopen%20user-review-requested%3A%40me$/)
 
-const page = '<form action="/search"></form><div><form class="js-issue-sidebar-form" aria-label="Select reviewers"><p>cashmann</p></form></div><form aria-label="Select assignees"></form>'
-assert.strictEqual(Reviewers.section(page), '<form class="js-issue-sidebar-form" aria-label="Select reviewers"><p>cashmann</p></form>')
-assert.throws(() => Reviewers.section("<form></form>"), /no reviewers sidebar/)
+const mergeBox = {
+  pullRequest: {
+    latestOpinionatedReviews: [
+      { author: { login: "ana" }, state: "APPROVED" },
+      { author: { login: "bo" }, state: "CHANGES_REQUESTED" },
+      { author: { login: "cy" }, state: "COMMENTED" },
+      { author: { login: "ed" }, state: "APPROVED" }
+    ],
+    pendingReviewRequests: [
+      { reviewer: { login: "di", type: "USER" } },
+      { reviewer: { login: "ed", type: "USER" } },
+      { reviewer: { name: "Core", type: "TEAM" } }
+    ]
+  }
+}
+assert.deepStrictEqual(Reviewers.parse(mergeBox), [
+  { login: "ana", state: "approved", label: "ana approved these changes" },
+  { login: "bo", state: "changes-requested", label: "bo requested changes" },
+  { login: "cy", state: "commented", label: "cy left review comments" },
+  { login: "di", state: "pending", label: "Awaiting requested review from di" },
+  { login: "ed", state: "pending", label: "Awaiting requested review from ed" },
+  { login: "Core", state: "pending", label: "Awaiting requested review from Core" }
+])
+assert.deepStrictEqual(Reviewers.parse({ pullRequest: {} }), [])
+assert.throws(() => Reviewers.parse({}), /no pull request/)
+assert.strictEqual(Reviewers.url("/acme/widgets/pull/12"), "https://github.com/acme/widgets/pull/12/page_data/merge_box")
 
 console.log("ok")

@@ -40,9 +40,12 @@ async function fetchStats(path) {
 }
 
 async function fetchReviewers(path) {
-  const res = await fetch(`https://github.com${path}`, { credentials: "include" })
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`)
-  return Reviewers.section(await res.text())
+  const res = await fetch(Reviewers.url(path), {
+    credentials: "include",
+    headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" }
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} loading reviewers for ${path}`)
+  return Reviewers.parse(await res.json())
 }
 
 async function fetchRequested() {

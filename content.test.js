@@ -1,15 +1,18 @@
 // Run with: npm test
 // Loads diffstat.js and content.js unchanged into jsdom with a stub
 // chrome.runtime. The stub reports +<PR number> additions, so each badge
-// shows which PR it was made for, and the reviewers sidebar in `sidebars`.
+// shows which PR it was made for, and the reviewers from the merge box data
+// in `boxes`, parsed by reviewers.js as the background worker does.
 const { test } = require("node:test")
 const assert = require("node:assert")
 const fs = require("node:fs")
 const { JSDOM } = require("jsdom")
 
-const SOURCE = ["diffstat.js", "reviewers.js", "content.js"].map((f) => fs.readFileSync(`${__dirname}/${f}`, "utf8")).join("\n")
+const Reviewers = require("./reviewers.js")
 
-function load(url, html, sidebars = {}) {
+const SOURCE = ["diffstat.js", "content.js"].map((f) => fs.readFileSync(`${__dirname}/${f}`, "utf8")).join("\n")
+
+function load(url, html, boxes = {}) {
   const dom = new JSDOM(`<!doctype html><body>${html}</body>`, { url, runScripts: "outside-only", pretendToBeVisual: true })
   const { window } = dom
   const asked = []
@@ -17,7 +20,7 @@ function load(url, html, sidebars = {}) {
     runtime: {
       sendMessage: async (msg) => {
         if (msg.type === "requested") return { ok: true, result: [] }
-        if (msg.type === "reviewers") return { ok: true, result: sidebars[msg.path] ?? sidebar() }
+        if (msg.type === "reviewers") return { ok: true, result: Reviewers.parse(boxes[msg.path] ?? mergeBox()) }
         asked.push(msg.path)
         return { ok: true, result: { additions: Number(msg.path.split("/").pop()), deletions: 0 } }
       }
@@ -56,31 +59,23 @@ function notificationRow(number) {
 
 const list = (...rows) => `<ul>${rows.join("")}</ul>`
 
-// Markup from a PR page's Reviewers sidebar (October 21, 2026), trimmed.
-const STATE_ICONS = {
-  approved: '<svg class="octicon octicon-check color-fg-success"></svg>',
-  "changes-requested": '<svg class="octicon octicon-file-diff color-fg-danger"></svg>',
-  commented: '<svg class="octicon octicon-comment color-fg-muted"></svg>'
-}
+// Trimmed from a PR's /page_data/merge_box JSON (November 11, 2026).
+const REVIEW_STATES = { approved: "APPROVED", "changes-requested": "CHANGES_REQUESTED", commented: "COMMENTED" }
 
-function reviewerRow(login, state) {
-  const person = `<span class="d-flex min-width-0 flex-1" data-hovercard-type="user" data-assignee-name="${login}"><a class="assignee Link--primary"><span>${login}</span></a></span>`
-  if (state === "pending") {
-    return `<div class="d-flex flex-items-center mb-2">${person}
-      <button class="btn-link flex-order-2" aria-label="Awaiting requested review from ${login}"><span class="reviewers-status-icon"><svg class="octicon octicon-dot-fill hx_dot-fill-pending-icon"></svg></span></button>
-      <tool-tip>Awaiting requested review from ${login}</tool-tip></div>`
+const reviewerRow = (login, state) => ({ login, state })
+
+function mergeBox(...rows) {
+  return {
+    pullRequest: {
+      state: "OPEN",
+      latestOpinionatedReviews: rows
+        .filter(({ state }) => state !== "pending")
+        .map(({ login, state }) => ({ id: 1, author: { login, avatarUrl: "" }, state: REVIEW_STATES[state] })),
+      pendingReviewRequests: rows
+        .filter(({ state }) => state === "pending")
+        .map(({ login }) => ({ reviewer: { login, avatarUrl: "", type: "USER" }, isCodeOwner: false }))
+    }
   }
-  return `<div class="d-flex flex-items-center mb-2">${person}
-    <a class="flex-order-1" id="review-status-${login}">${STATE_ICONS[state]}</a>
-    <tool-tip for="review-status-${login}">${login} ${state}</tool-tip>
-    <button class="mr-2 btn-link muted-icon" type="submit"><span class="reviewers-status-icon"><svg class="octicon octicon-sync"></svg></span></button>
-    <tool-tip>Re-request review</tool-tip></div>`
-}
-
-function sidebar(...rows) {
-  const picker = `<details><div data-hovercard-type="user" data-assignee-name="suggested">suggested</div></details>`
-  return `<form class="js-issue-sidebar-form" aria-label="Select reviewers">${picker}<span class="css-truncate">${rows.join("")}
-    <p class="mt-2">At least 1 approving review is required to merge this pull request.</p></span></form>`
 }
 
 const reviewerLines = (page) =>
@@ -229,20 +224,20 @@ test("a row with no anchor doesn't borrow another row's from an enclosing list i
 
 test("/pulls: each row gets a line with every reviewer and their review state", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12), pullsRow(34)), {
-    "/acme/widgets/pull/12": sidebar(
+    "/acme/widgets/pull/12": mergeBox(
       reviewerRow("ana", "approved"),
       reviewerRow("bo", "changes-requested"),
       reviewerRow("cy", "commented"),
       reviewerRow("di", "pending")
     ),
-    "/acme/widgets/pull/34": sidebar(reviewerRow("ana", "pending"))
+    "/acme/widgets/pull/34": mergeBox(reviewerRow("ana", "pending"))
   })
   await page.settle()
   assert.deepStrictEqual(reviewerLines(page), [
     [
-      "approved ana (ana approved)",
-      "changes-requested bo (bo changes-requested)",
-      "commented cy (cy commented)",
+      "approved ana (ana approved these changes)",
+      "changes-requested bo (bo requested changes)",
+      "commented cy (cy left review comments)",
       "pending di (Awaiting requested review from di)"
     ],
     ["pending ana (Awaiting requested review from ana)"]
@@ -251,12 +246,12 @@ test("/pulls: each row gets a line with every reviewer and their review state", 
   assert.strictEqual(line.previousElementSibling, page.document.querySelector(".description__mZjLFE"))
   assert.deepStrictEqual(
     [...line.querySelectorAll("svg")].map((svg) => svg.getAttribute("aria-label")),
-    ["ana approved", "bo changes-requested", "cy commented", "Awaiting requested review from di"]
+    ["ana approved these changes", "bo requested changes", "cy left review comments", "Awaiting requested review from di"]
   )
 })
 
 test("/pulls: a PR with no reviewers gets no reviewer line", async () => {
-  const page = load("https://github.com/pulls", list(pullsRow(12)), { "/acme/widgets/pull/12": sidebar() })
+  const page = load("https://github.com/pulls", list(pullsRow(12)), { "/acme/widgets/pull/12": mergeBox() })
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+12"])
   assert.deepStrictEqual(reviewerLines(page), [])
@@ -264,30 +259,30 @@ test("/pulls: a PR with no reviewers gets no reviewer line", async () => {
 
 test("every /pulls list gets reviewer lines", async () => {
   for (const url of ["https://github.com/pulls", "https://github.com/pulls/review-requested", "https://github.com/pulls/assigned"]) {
-    const page = load(url, list(pullsRow(12)), { "/acme/widgets/pull/12": sidebar(reviewerRow("ana", "approved")) })
+    const page = load(url, list(pullsRow(12)), { "/acme/widgets/pull/12": mergeBox(reviewerRow("ana", "approved")) })
     await page.settle()
-    assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)"]], url)
+    assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)"]], url)
   }
 })
 
 test("/notifications: each PR row gets a reviewer line under its title", async () => {
   const page = load("https://github.com/notifications", list(notificationRow(7)), {
-    "/acme/widgets/pull/7": sidebar(reviewerRow("ana", "approved"), reviewerRow("bo", "pending"))
+    "/acme/widgets/pull/7": mergeBox(reviewerRow("ana", "approved"), reviewerRow("bo", "pending"))
   })
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+7"])
-  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)", "pending bo (Awaiting requested review from bo)"]])
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)", "pending bo (Awaiting requested review from bo)"]])
   const line = page.document.querySelector(".gh-reviewers")
   assert.strictEqual(line.previousElementSibling, page.document.querySelector(".markdown-title"))
 })
 
 test("/pulls: a row decorated again keeps a single reviewer line", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12)), {
-    "/acme/widgets/pull/12": sidebar(reviewerRow("ana", "approved"))
+    "/acme/widgets/pull/12": mergeBox(reviewerRow("ana", "approved"))
   })
   await page.settle()
   const span = page.document.querySelector(".description__mZjLFE > span:first-child")
   span.replaceWith(span.ownerDocument.createRange().createContextualFragment("<span><button>acme/widgets</button><span>#12</span></span>"))
   await page.settle()
-  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved)"]])
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)"]])
 })
