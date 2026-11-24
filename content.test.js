@@ -250,11 +250,51 @@ test("/pulls: each row gets a line with every reviewer and their review state", 
   )
 })
 
-test("/pulls: a PR with no reviewers gets no reviewer line", async () => {
+// The line is there from the first scan, at a fixed height, so rows don't
+// grow one at a time as each PR's reviewers arrive.
+test("every row has its reviewer line before any reviewers have loaded", () => {
+  const pulls = load("https://github.com/pulls", list(pullsRow(12), pullsRow(34)))
+  assert.deepStrictEqual(reviewerLines(pulls), [[], []])
+  const notifications = load("https://github.com/notifications", list(notificationRow(7)))
+  assert.deepStrictEqual(reviewerLines(notifications), [[]])
+})
+
+test("/pulls: a PR with no reviewers keeps an empty reviewer line", async () => {
   const page = load("https://github.com/pulls", list(pullsRow(12)), { "/acme/widgets/pull/12": mergeBox() })
   await page.settle()
   assert.deepStrictEqual(page.badges(), ["+12"])
-  assert.deepStrictEqual(reviewerLines(page), [])
+  assert.deepStrictEqual(reviewerLines(page), [[]])
+})
+
+test("/pulls: a PR whose reviewers fail to load keeps an empty reviewer line", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)))
+  const { sendMessage } = page.window.chrome.runtime
+  page.window.chrome.runtime.sendMessage = async (msg) => (msg.type === "reviewers" ? { ok: false, error: "HTTP 500" } : sendMessage(msg))
+  page.window.console.warn = () => {}
+  page.document.querySelector("ul").insertAdjacentHTML("beforeend", pullsRow(34))
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+12", "+34"])
+  assert.deepStrictEqual(reviewerLines(page)[1], [])
+})
+
+test("/pulls: a row whose reviewer line React drops gets it back", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), {
+    "/acme/widgets/pull/12": mergeBox(reviewerRow("ana", "approved"))
+  })
+  await page.settle()
+  page.document.querySelector(".gh-reviewers").remove()
+  page.document.querySelector(".inner__Rm1Enx").append(page.document.createElement("div"))
+  await page.settle()
+  assert.deepStrictEqual(page.badges(), ["+12"])
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)"]])
+})
+
+test("a reviewer line's tooltip lists every reviewer, for the ones clipped off the end", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), {
+    "/acme/widgets/pull/12": mergeBox(reviewerRow("ana", "approved"), reviewerRow("bo", "pending"))
+  })
+  await page.settle()
+  assert.strictEqual(page.document.querySelector(".gh-reviewers").title, "ana approved these changes\nAwaiting requested review from bo")
 })
 
 test("every /pulls list gets reviewer lines", async () => {
