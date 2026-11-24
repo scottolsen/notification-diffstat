@@ -61,9 +61,10 @@ function scan(scope) {
     const found = path && locate(page, link)
     if (!found) continue
     // React can reuse a row for another PR, or re-render the part holding
-    // the badge, so a row is done only while its badge is there for its PR.
+    // the badge or the reviewers line, so a row is done only while both are
+    // there for its PR.
     const { row, anchor } = found
-    if (row.getAttribute(DONE) === path && anchor.querySelector(".gh-diffstat")) continue
+    if (row.getAttribute(DONE) === path && anchor.querySelector(".gh-diffstat") && row.querySelector(".gh-reviewers")) continue
     for (const stale of row.querySelectorAll(OURS)) stale.remove()
     row.setAttribute(DONE, path)
     decorate(page, anchor, path)
@@ -94,7 +95,7 @@ async function decorate(page, anchor, path) {
   badge.className = "gh-diffstat gh-diffstat--loading"
   badge.textContent = "…"
   anchor.append(badge)
-  showReviewers(page.reviewersAfter(anchor), badge, path)
+  showReviewers(reviewersLine(page.reviewersAfter(anchor)), path)
 
   const [res, requested] = await Promise.all([ask({ type: "diffstat", path }), requestedPaths()])
   if (res.ok) render(badge, res.result)
@@ -123,17 +124,25 @@ async function loadRequested() {
   return []
 }
 
-// Adds a line after `after` with each reviewer's state. The
-// badge stands for this decoration of the row: once a rescan has removed
-// it, the line belongs to a row that's been decorated again.
-async function showReviewers(after, badge, path) {
-  const res = await ask({ type: "reviewers", path })
-  if (!res.ok) return console.warn(`notification-diffstat: couldn't load reviewers for ${path}:`, res.error)
-  if (res.result.length === 0 || !badge.isConnected) return
+// Adds the reviewers line after `after`, empty, as soon as the row is found.
+// Its height is fixed in styles.css, so every row grows once, together,
+// rather than one at a time as each PR's reviewers arrive. It stays, empty,
+// for a PR with no reviewers.
+function reviewersLine(after) {
   const line = document.createElement("div")
   line.className = "gh-reviewers"
-  line.append(...res.result.map(reviewer))
   after.after(line)
+  return line
+}
+
+// Fills `line` with each reviewer's state. The line is clipped to its one
+// row, so its tooltip lists everyone.
+async function showReviewers(line, path) {
+  const res = await ask({ type: "reviewers", path })
+  if (!res.ok) return console.warn(`notification-diffstat: couldn't load reviewers for ${path}:`, res.error)
+  if (res.result.length === 0) return
+  line.title = res.result.map(({ label }) => label).join("\n")
+  line.append(...res.result.map(reviewer))
 }
 
 function reviewer({ login, state, label }) {

@@ -53,12 +53,18 @@
   line-height: 1;
 }
 
+/* One line of fixed height, there before the reviewers are, so filling it
+   in never changes the row's height. A list too long for it is cut off. */
 .gh-reviewers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  height: 20px;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 4px;
+  overflow: hidden;
   font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--fgColor-muted, #59636e);
 }
 
@@ -66,7 +72,9 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  white-space: nowrap;
+  height: 20px;
+  margin-right: 12px;
+  vertical-align: top;
 }
 
 .gh-reviewers__icon {

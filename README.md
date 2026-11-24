@@ -40,7 +40,11 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   requested, a grey comment for commented, and a yellow dot for awaiting
   review. Hover over one to see what it means. The extension reads these
   from the JSON each PR's page loads its merge box from
-  (`/pull/123/page_data/merge_box`).
+  (`/pull/123/page_data/merge_box`). The line is added to every row as soon
+  as the page loads and filled in as each PR's reviewers arrive, so rows
+  don't change height one at a time. It stays empty for a PR with no
+  reviewers, and a list too long for one line is cut off with an ellipsis;
+  hover over the line to see everyone.
 - Up to four diffs or PR pages are fetched at once, and results are cached for five
   minutes per browser session. The review request search and each PR's
   reviewers are cached for two minutes.
