@@ -55,6 +55,15 @@
 
 /* One line of fixed height, there before the reviewers are, so filling it
    in never changes the row's height. A list too long for it is cut off. */
+.gh-pr-meta {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--fgColor-muted, #59636e);
+}
+
 .gh-reviewers {
   height: 20px;
   min-width: 0;

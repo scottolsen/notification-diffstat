@@ -34,6 +34,12 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   GitHub search (`is:pr is:open user-review-requested:@me`) per page view.
   GitHub clears a request once you submit a review, so the star goes away
   then too.
+- After the diffstat, each PR shows who opened it and how many comments it
+  has, as in `by octocat · 11 comments`. The count is GitHub's own comment total for the PR, the number its
+  PR lists show; it counts more than conversation comments. The extension reads both from the repository's pull request
+  list, searched for the PR's number
+  (`/owner/repo/pulls?q=is:pr 123`, asked for as JSON). If that fails, the
+  row shows neither.
 - On the notifications page and in the `/pulls` lists, each PR gets a
   second line listing its reviewers with the same icons as the PR page's
   Reviewers sidebar: a green check for approved, a red file-diff for changes
@@ -45,9 +51,9 @@ It also works in other Chromium browsers (Edge, Brave, Arc).
   don't change height one at a time. It stays empty for a PR with no
   reviewers, and a list too long for one line is cut off with an ellipsis;
   hover over the line to see everyone.
-- Up to four diffs or PR pages are fetched at once, and results are cached for five
+- Up to four requests are made at once. Diff counts are cached for five
   minutes per browser session. The review request search and each PR's
-  reviewers are cached for two minutes.
+  reviewers, author and comment count are cached for two minutes.
 - The blocks use GitHub's rounding, so `+10 −53` shows 0 green, 4 red and
   1 grey, the same as on the PR page.
 - Colors come from GitHub's own CSS variables, so it matches light and dark
@@ -60,9 +66,9 @@ see the error.
 
 | Permission | Why |
 | --- | --- |
-| `https://github.com/*` | Runs on the notifications and pull request list pages, requests `.diff` files and PR pages and searches your review requests. |
+| `https://github.com/*` | Runs on the notifications and pull request list pages, requests `.diff` files, PR merge box data and repository pull request lists, and searches your review requests. |
 | `https://patch-diff.githubusercontent.com/*` | GitHub redirects `.diff` requests here. |
-| `storage` | Caches diff counts, review requests and reviewers for the browser session. |
+| `storage` | Caches diff counts, review requests, reviewers, authors and comment counts for the browser session. |
 
 The extension sends nothing anywhere except GitHub.
 
@@ -73,9 +79,11 @@ npm install
 npm test
 ```
 
-`test.js` covers the diff line counter and block math in `diffstat.js`, and
-the search response parsing in `review-requests.js`, and reading reviewers
-out of a PR's merge box data in `reviewers.js`. `content.test.js` loads
+`test.js` covers the diff line counter and block math in `diffstat.js`,
+the search response parsing in `review-requests.js`, reading reviewers out
+of a PR's merge box data in `reviewers.js`, and reading the author and
+comment count out of a pull request list in `pull-details.js`.
+`content.test.js` loads
 `content.js` into [jsdom](https://github.com/jsdom/jsdom) with copies of the
 notifications and `/pulls` markup and checks where badges land. Specs marked
 `todo` describe known problems; they run and report failures without failing
