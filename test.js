@@ -3,6 +3,7 @@ const assert = require("node:assert")
 const { count, blocks } = require("./diffstat.js")
 const ReviewRequests = require("./review-requests.js")
 const Reviewers = require("./reviewers.js")
+const PullDetails = require("./pull-details.js")
 
 const diff = [
   "diff --git a/a.rb b/a.rb",
@@ -67,5 +68,25 @@ assert.deepStrictEqual(Reviewers.parse(mergeBox), [
 assert.deepStrictEqual(Reviewers.parse({ pullRequest: {} }), [])
 assert.throws(() => Reviewers.parse({}), /no pull request/)
 assert.strictEqual(Reviewers.url("/acme/widgets/pull/12"), "https://github.com/acme/widgets/pull/12/page_data/merge_box")
+
+// Trimmed from github.com/rails/rails/pulls?q=is:pr+59822 asked for as JSON
+// (November 24, 2026). A PR with no comments has no commentCount.
+const pulls = {
+  payload: {
+    repoPullsDashboardContentRoute: {
+      results: [
+        { author: { displayLogin: "ana" }, number: 3412, title: "Mentions #12" },
+        { author: { displayLogin: "bo" }, commentCount: 11, number: 12 },
+        { number: 7 }
+      ]
+    }
+  }
+}
+assert.deepStrictEqual(PullDetails.parse(pulls, "/acme/widgets/pull/12"), { author: "bo", comments: 11 })
+assert.deepStrictEqual(PullDetails.parse(pulls, "/acme/widgets/pull/3412"), { author: "ana", comments: 0 })
+assert.deepStrictEqual(PullDetails.parse(pulls, "/acme/widgets/pull/7"), { author: null, comments: 0 })
+assert.throws(() => PullDetails.parse(pulls, "/acme/widgets/pull/34"), /#34 isn't in/)
+assert.throws(() => PullDetails.parse({}, "/acme/widgets/pull/12"), /unexpected pull request list response/)
+assert.strictEqual(PullDetails.url("/acme/widgets/pull/12"), "https://github.com/acme/widgets/pulls?q=is%3Apr%2012")
 
 console.log("ok")

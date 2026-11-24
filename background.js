@@ -1,10 +1,11 @@
 const DIFFSTAT_TTL_MS = 5 * 60 * 1000
 const REQUESTED_TTL_MS = 2 * 60 * 1000
 const REVIEWERS_TTL_MS = 2 * 60 * 1000
+const DETAILS_TTL_MS = 2 * 60 * 1000
 const MAX_CONCURRENT = 4
 const MAX_SEARCH_PAGES = 10
 
-importScripts("diffstat.js", "review-requests.js", "reviewers.js")
+importScripts("diffstat.js", "review-requests.js", "reviewers.js", "pull-details.js")
 
 let active = 0
 const queue = []
@@ -12,7 +13,8 @@ const queue = []
 const handlers = {
   diffstat: ({ path }) => cached(`diffstat:${path}`, DIFFSTAT_TTL_MS, () => throttled(() => fetchStats(path))),
   requested: () => cached("requested", REQUESTED_TTL_MS, fetchRequested),
-  reviewers: ({ path }) => cached(`reviewers:${path}`, REVIEWERS_TTL_MS, () => throttled(() => fetchReviewers(path)))
+  reviewers: ({ path }) => cached(`reviewers:${path}`, REVIEWERS_TTL_MS, () => throttled(() => fetchReviewers(path))),
+  details: ({ path }) => cached(`details:${path}`, DETAILS_TTL_MS, () => throttled(() => fetchDetails(path)))
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -40,12 +42,22 @@ async function fetchStats(path) {
 }
 
 async function fetchReviewers(path) {
-  const res = await fetch(Reviewers.url(path), {
+  const res = await fetchJson(Reviewers.url(path))
+  if (!res.ok) throw new Error(`HTTP ${res.status} loading reviewers for ${path}`)
+  return Reviewers.parse(await res.json())
+}
+
+async function fetchDetails(path) {
+  const res = await fetchJson(PullDetails.url(path))
+  if (!res.ok) throw new Error(`HTTP ${res.status} loading the author and comments for ${path}`)
+  return PullDetails.parse(await res.json(), path)
+}
+
+function fetchJson(url) {
+  return fetch(url, {
     credentials: "include",
     headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" }
   })
-  if (!res.ok) throw new Error(`HTTP ${res.status} loading reviewers for ${path}`)
-  return Reviewers.parse(await res.json())
 }
 
 async function fetchRequested() {
@@ -59,10 +71,7 @@ async function fetchRequested() {
 }
 
 async function fetchSearchPage(page) {
-  const res = await fetch(ReviewRequests.searchUrl(page), {
-    credentials: "include",
-    headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" }
-  })
+  const res = await fetchJson(ReviewRequests.searchUrl(page))
   if (!res.ok) throw new Error(`HTTP ${res.status} searching review requests`)
   return res.json()
 }

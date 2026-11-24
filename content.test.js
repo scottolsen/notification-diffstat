@@ -1,8 +1,10 @@
 // Run with: npm test
 // Loads diffstat.js and content.js unchanged into jsdom with a stub
 // chrome.runtime. The stub reports +<PR number> additions, so each badge
-// shows which PR it was made for, and the reviewers from the merge box data
-// in `boxes`, parsed by reviewers.js as the background worker does.
+// shows which PR it was made for, the reviewers from the merge box data in
+// `boxes`, parsed by reviewers.js as the background worker does, and the
+// author and comment count in `details`, where null stands for a lookup
+// that failed.
 const { test } = require("node:test")
 const assert = require("node:assert")
 const fs = require("node:fs")
@@ -12,7 +14,7 @@ const Reviewers = require("./reviewers.js")
 
 const SOURCE = ["diffstat.js", "content.js"].map((f) => fs.readFileSync(`${__dirname}/${f}`, "utf8")).join("\n")
 
-function load(url, html, boxes = {}) {
+function load(url, html, boxes = {}, details = {}) {
   const dom = new JSDOM(`<!doctype html><body>${html}</body>`, { url, runScripts: "outside-only", pretendToBeVisual: true })
   const { window } = dom
   const asked = []
@@ -21,6 +23,7 @@ function load(url, html, boxes = {}) {
       sendMessage: async (msg) => {
         if (msg.type === "requested") return { ok: true, result: [] }
         if (msg.type === "reviewers") return { ok: true, result: Reviewers.parse(boxes[msg.path] ?? mergeBox()) }
+        if (msg.type === "details") return detailsResponse(details[msg.path])
         asked.push(msg.path)
         return { ok: true, result: { additions: Number(msg.path.split("/").pop()), deletions: 0 } }
       }
@@ -31,6 +34,10 @@ function load(url, html, boxes = {}) {
   const badges = (root = window.document) =>
     [...root.querySelectorAll(".gh-diffstat")].map((b) => b.querySelector(".gh-diffstat__add")?.textContent ?? b.textContent)
   return { window, document: window.document, asked, settle, badges }
+}
+
+function detailsResponse(found = { author: "octo", comments: 0 }) {
+  return found ? { ok: true, result: found } : { ok: false, error: "HTTP 500" }
 }
 
 // Markup from github.com/pulls (October 13, 2026). GitHub hashes these class
@@ -325,4 +332,51 @@ test("/pulls: a row decorated again keeps a single reviewer line", async () => {
   span.replaceWith(span.ownerDocument.createRange().createContextualFragment("<span><button>acme/widgets</button><span>#12</span></span>"))
   await page.settle()
   assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)"]])
+})
+
+const metas = (page) => [...page.document.querySelectorAll(".gh-pr-meta")].map((meta) => meta.textContent)
+
+test("each row shows who opened the PR and its comment count, after the diffstat", async () => {
+  const details = {
+    "/acme/widgets/pull/12": { author: "ana", comments: 11 },
+    "/acme/widgets/pull/34": { author: "bo", comments: 1 },
+    "/acme/widgets/pull/7": { author: "cy", comments: 0 }
+  }
+  const pulls = load("https://github.com/pulls", list(pullsRow(12), pullsRow(34)), {}, details)
+  await pulls.settle()
+  assert.deepStrictEqual(metas(pulls), ["by ana · 11 comments", "by bo · 1 comment"])
+  const meta = pulls.document.querySelector(".gh-pr-meta")
+  assert.strictEqual(meta.previousElementSibling, pulls.document.querySelector(".gh-diffstat"))
+  assert.deepStrictEqual(pulls.asked, ["/acme/widgets/pull/12", "/acme/widgets/pull/34"])
+
+  const notifications = load("https://github.com/notifications", list(notificationRow(7)), {}, details)
+  await notifications.settle()
+  assert.deepStrictEqual(metas(notifications), ["by cy · 0 comments"])
+  assert.strictEqual(notifications.document.querySelector("p.f6 .gh-pr-meta").previousElementSibling.className, "gh-diffstat")
+})
+
+test("a PR whose author and comment count fail to load keeps its badge and reviewers", async () => {
+  const boxes = { "/acme/widgets/pull/12": mergeBox(reviewerRow("ana", "approved")) }
+  const page = load("https://github.com/pulls", list(pullsRow(12)), boxes, { "/acme/widgets/pull/12": null })
+  page.window.console.warn = () => {}
+  await page.settle()
+  assert.deepStrictEqual(metas(page), [""])
+  assert.deepStrictEqual(page.badges(), ["+12"])
+  assert.deepStrictEqual(reviewerLines(page), [["approved ana (ana approved these changes)"]])
+})
+
+test("a PR whose author GitHub doesn't name shows only its comment count", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), {}, { "/acme/widgets/pull/12": { author: null, comments: 4 } })
+  await page.settle()
+  assert.deepStrictEqual(metas(page), ["4 comments"])
+})
+
+test("a row decorated again keeps a single author and comment count", async () => {
+  const page = load("https://github.com/pulls", list(pullsRow(12)), {}, { "/acme/widgets/pull/12": { author: "ana", comments: 2 } })
+  await page.settle()
+  const span = page.document.querySelector(".description__mZjLFE > span:first-child")
+  span.replaceWith(span.ownerDocument.createRange().createContextualFragment("<span><button>acme/widgets</button><span>#12</span></span>"))
+  await page.settle()
+  assert.deepStrictEqual(metas(page), ["by ana · 2 comments"])
+  assert.deepStrictEqual(page.badges(), ["+12"])
 })

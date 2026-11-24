@@ -1,11 +1,12 @@
 const PR_PATH = /^\/[^/]+\/[^/]+\/pull\/\d+/
 const DONE = "data-gh-diffstat"
 const ROW = 'li, [role="listitem"]'
-const OURS = ".gh-diffstat, .gh-reviewers"
+const OURS = ".gh-diffstat, .gh-pr-meta, .gh-reviewers"
 
 // On each page: the link that names the row's PR, and where the badge goes,
 // right after "owner/repo #123". On /pulls a row can link to other PRs too,
-// so only the title link counts. Rows on both pages also get a line listing
+// so only the title link counts. The PR's author and comment count follow
+// the badge. Rows on both pages also get a line listing
 // their reviewers, placed after the element `reviewersAfter` returns: the PR
 // title on /notifications, the "owner/repo #123" line on /pulls.
 const PAGES = [
@@ -94,7 +95,9 @@ async function decorate(page, anchor, path) {
   const badge = document.createElement("span")
   badge.className = "gh-diffstat gh-diffstat--loading"
   badge.textContent = "…"
-  anchor.append(badge)
+  const meta = span("gh-pr-meta")
+  anchor.append(badge, meta)
+  showDetails(meta, path)
   showReviewers(reviewersLine(page.reviewersAfter(anchor)), path)
 
   const [res, requested] = await Promise.all([ask({ type: "diffstat", path }), requestedPaths()])
@@ -122,6 +125,16 @@ async function loadRequested() {
   if (res.ok) return res.result
   console.warn("notification-diffstat: couldn't load your review requests:", res.error)
   return []
+}
+
+// Fills `meta`, which follows the badge, with who opened the PR and how many
+// comments it has. It stays empty if they can't be loaded.
+async function showDetails(meta, path) {
+  const res = await ask({ type: "details", path })
+  if (!res.ok) return console.warn(`notification-diffstat: couldn't load the author and comments for ${path}:`, res.error)
+  const { author, comments } = res.result
+  const count = `${comments} ${comments === 1 ? "comment" : "comments"}`
+  meta.textContent = author ? `by ${author} · ${count}` : count
 }
 
 // Adds the reviewers line after `after`, empty, as soon as the row is found.
